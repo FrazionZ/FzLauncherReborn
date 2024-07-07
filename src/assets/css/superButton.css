@@ -1,0 +1,56 @@
+.btn-download-launch-game  {
+    background: transparent !important;
+    background-color: transparent !important;
+    padding: 12px !important;
+    background-size: cover;
+    border-radius: 0;
+    
+    font-weight: 700;
+    font-size: 32px;
+    line-height: 48px;
+    color: #FFF;
+    text-shadow: 0px 2px 0px rgba(0, 0, 0, 0.5);
+    position: relative;
+
+    cursor: default;
+    
+    width: fit-content;
+    height: fit-content;
+
+}
+.btn-download-launch-game:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+.btn-download-launch-game:hover:disabled svg g#hoverRect {
+    transform: translate(-20rem, 0px) !important;
+}
+.btn-download-launch-game svg {
+    position: relative;
+    z-index: 2;
+}
+.btn-download-launch-game svg path {
+    cursor: pointer;
+}
+svg g#hoverRect {
+    transform: translate(-20rem, 0px);
+    transition: transform 0.25s ease-in-out;
+}
+.btn-download-launch-game:hover svg g#hoverRect {
+    transform: translate(0px, 0px);
+}
+.btn-download-launch-game .label {
+    position: absolute;
+    z-index: 4;
+    width: 100%;
+    cursor: pointer;
+    left: 0px;
+    text-transform: uppercase;
+    display: flex;
+    justify-content: center;
+}
+.btn-download-launch-game:hover  {
+    background: transparent !important;
+    background-color: transparent !important;
+    transition: transform 330ms ease-in-out;
+}

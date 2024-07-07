@@ -1,0 +1,37 @@
+//
+// Variables
+//
+
+$global-margin: 15px;
+$global-muted: #a8a8a8;
+$global-color: darken($global-muted, 25);
+$global-background: #fff;
+$global-primary: #0177FA;
+
+.progressBarCircle svg {
+  display: inline-flex;
+  vertical-align: bottom;
+  width: 200px;
+  height: 200px;
+}
+
+.progressBarCircle circle {
+  stroke: rgba(#24262B, 0.25);
+  stroke-width: 5px;
+  stroke-dasharray: 0;
+  fill: none;
+}
+
+.progressBarCircle .meter {
+  stroke-width: 5px;
+  stroke: #F7A92F;
+  fill: none;
+  transition: stroke-dashoffset 1s cubic-bezier(0.43, 0.41, 0.22, 0.91);
+  transform-origin: center center;
+  transform: rotate(-90deg) scaleX(-1);
+}
+
+.progressBarCircle text {
+  fill: #fff;
+  font-weight: bold;
+}

@@ -1,0 +1,126 @@
+{
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devPath": "http://localhost:1420",
+    "distDir": "../dist"
+  },
+  "package": {
+    "productName": "FrazionZ Launcher",
+    "version": "1.2.2"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "shell": {
+        "all": false,
+        "open": true
+      },
+      "os": {
+        "all": true
+      },
+      "path": {
+        "all": true
+      },
+      "fs": {
+        "all": false,
+        "scope": [
+          "$APPDATA",
+          "$APPDATA/Launcher",
+          "$APPDATA/Launcher/*",
+          "$APPDATA/Metas",
+          "$APPDATA/Metas/*",
+          "$APPDATA/Metas/**",
+          "$APPDATA/Metas/**/*",
+          "$APPDATA/MCVersions",
+          "$APPDATA/MCVersions/*",
+          "$APPDATA/MCVersions/**",
+          "$APPDATA/MCVersions/**/*",
+          "$APPDATA/Launcher/Runtime",
+          "$APPDATA/Launcher/Runtime/*"
+        ],
+        "exists": true,
+        "readFile": true,
+        "writeFile": true,
+        "createDir": true,
+        "readDir": true,
+        "removeFile": true
+      },
+      "window": {
+        "all": false,
+        "setDecorations": true,
+        "setPosition": true,
+        "setSize": true,
+        "setMinSize": true,
+        "setMaxSize": true,
+        "setResizable": true,
+        "maximize": true,
+        "unmaximize": true,
+        "minimize": true,
+        "close": true,
+        "startDragging": true,
+        "create": true
+      },
+      "http": {
+        "all": true,
+        "request": true,
+        "scope": [
+          "http://localhost/*",
+          "https://api.frazionz.net/*",
+          "https://frazionz.net/*",
+          "https://download.frazionz.net/*"
+        ]
+      },
+      "notification": {
+        "all": true
+      },
+      "dialog": {
+        "all": false,
+        "message": true,
+        "open": true
+      },
+      "process": {
+        "all": true
+      }
+    },
+    "windows": [
+      {
+        "title": "FzLauncher",
+        "width": 1280,
+        "height": 720,
+        "resizable": true,
+        "decorations": false,
+        "transparent": true,
+        "titleBarStyle": "Transparent"
+      }
+    ],
+    "security": {
+      "csp": ""
+    },
+    "bundle": {
+      "active": true,
+      "targets": "all",
+      "identifier": "net.frazionz.launcher",
+      "windows": {
+        "webviewInstallMode": {
+          "type": "offlineInstaller"
+        }
+      },
+      "icon": [
+        "icons/32x32.png",
+        "icons/128x128.png",
+        "icons/128x128@2x.png",
+        "icons/icon.icns",
+        "icons/icon.ico"
+      ]
+    },
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://api.frazionz.net/updater/check/{{target}}/{{arch}}/{{current_version}}"
+      ],
+      "dialog": false,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZFNTI4Q0JCMDdDNTJGQzQKUldURUw4VUh1NHhTYnZURzBRRVVCL3NMV1pLOFJkUWpsVytWb0QvYWdkSXdmWllubk5JdnRYTVQK"
+    }
+  }
+}
