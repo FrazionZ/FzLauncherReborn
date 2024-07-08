@@ -24,7 +24,6 @@ use std::fs::{self, File, OpenOptions};
 use std::future::IntoFuture;
 use std::io::Error as IOError;
 use std::io::{self, BufRead, BufReader, Read};
-use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::api::path::app_data_dir;
@@ -187,6 +186,48 @@ async fn center_window(window: Window) -> Result<(), String> {
     Ok(())
 }
 
+
+
+#[cfg(unix)]
+fn start_process(
+    command: String,
+    args: Vec<String>,
+) -> Result<std::process::Child, std::io::Error> {
+    let mut child = Command::new(command)
+    .args(&args)
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped())
+    .spawn();
+
+    match child {
+        Ok(child_res) => Ok(child_res),
+        Err(e) => Err(e),
+    }
+}
+
+#[cfg(windows)]
+fn start_process(
+    command: String,
+    args: Vec<String>,
+) -> Result<std::process::Child, std::io::Error> {
+    use std::os::windows::process::CommandExt;
+
+
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+    let mut child = Command::new(command)
+    .args(&args)
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped())
+    .creation_flags(CREATE_NO_WINDOW)
+    .spawn();
+
+    match child {
+        Ok(child_res) => Ok(child_res),
+        Err(e) => Err(e),
+    }
+}
+
 #[tauri::command]
 async fn start_child_process(
     window: Window,
@@ -194,40 +235,36 @@ async fn start_child_process(
     args: Vec<String>,
 ) -> Result<(), String> {
     let result = task::spawn_blocking(move || {
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        let mut child = Command::new(command)
-            .args(&args)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .creation_flags(CREATE_NO_WINDOW)
-            .spawn()
-            .map_err(|e| e.to_string())?;
+        match start_process(command, args.to_vec()) {
+            Ok(mut child) => {
+                let stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
+                let stderr = child.stderr.take().ok_or("Failed to capture stderr")?;
 
-        let stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
-        let stderr = child.stderr.take().ok_or("Failed to capture stderr")?;
+                let stdout_reader = BufReader::new(stdout);
+                let stderr_reader = BufReader::new(stderr);
 
-        let stdout_reader = BufReader::new(stdout);
-        let stderr_reader = BufReader::new(stderr);
+                // Handle stdout
+                for line in stdout_reader.lines() {
+                    let line = line.map_err(|e| e.to_string())?;
+                    window
+                        .emit("process-output", format!("stdout: {}", line))
+                        .map_err(|e| e.to_string())?;
+                }
 
-        // Handle stdout
-        for line in stdout_reader.lines() {
-            let line = line.map_err(|e| e.to_string())?;
-            window
-                .emit("process-output", format!("stdout: {}", line))
-                .map_err(|e| e.to_string())?;
+                // Handle stderr
+                for line in stderr_reader.lines() {
+                    let line = line.map_err(|e| e.to_string())?;
+                    window
+                        .emit("process-output", format!("stderr: {}", line))
+                        .map_err(|e| e.to_string())?;
+                }
+
+                child.wait().map_err(|e| e.to_string())?;
+
+                Ok(())
+            },
+            Err(_) => Err("Error".to_string())
         }
-
-        // Handle stderr
-        for line in stderr_reader.lines() {
-            let line = line.map_err(|e| e.to_string())?;
-            window
-                .emit("process-output", format!("stderr: {}", line))
-                .map_err(|e| e.to_string())?;
-        }
-
-        child.wait().map_err(|e| e.to_string())?;
-
-        Ok(())
     })
     .await;
 
