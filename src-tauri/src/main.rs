@@ -733,14 +733,29 @@ async fn read_base64_from_zip_sync(zip_path: String, file_name: String) -> Resul
 }
 
 #[cfg(unix)]
-fn kill_process(pid: u32) -> Result<(), String> {
-    use nix::sys::signal::{kill, Signal};
-    use nix::unistd::Pid;
-
-    match kill(Pid::from_raw(pid as i32), Signal::SIGKILL) {
-        Ok(_) => Ok(()),
-        Err(err) => Err(err.to_string()),
+fn kill_process(pid: i32) -> Result<(), String> {
+    use libc::{c_int};
+    type pid_t = i32;
+    extern "C" {
+        fn kill(pid: pid_t, sig: c_int) -> c_int;
     }
+
+    let pid: pid_t = pid; // Remplacez par l'ID du processus cible
+
+    // Signal à envoyer (SIGTERM dans cet exemple)
+    let sig: c_int = libc::SIGTERM;
+
+    // Envoyer le signal
+    let result = unsafe { kill(pid, sig) };
+
+    // Vérifier le résultat
+    if result == 0 {
+        println!("Signal envoyé avec succès");
+    } else {
+        eprintln!("Échec de l'envoi du signal");
+    }
+
+    Ok(())
 }
 
 #[cfg(windows)]
@@ -764,6 +779,13 @@ fn kill_process(pid: u32) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(unix)]
+#[tauri::command]
+fn kill_process_command(pid: i32) -> Result<(), String> {
+    kill_process(pid)
+}
+
+#[cfg(windows)]
 #[tauri::command]
 fn kill_process_command(pid: u32) -> Result<(), String> {
     kill_process(pid)
