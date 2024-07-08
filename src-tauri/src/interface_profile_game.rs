@@ -1,5 +1,7 @@
 pub(crate) struct InterfaceProfileGame;
 
+use std::{fs, path::PathBuf};
+
 use serde::{Serialize, Deserialize};
 pub trait TraitProfileGame {
     type ProfileGame;
@@ -24,6 +26,12 @@ pub struct Game {
     pub classMain: String,
     #[serde(rename = "clientJarName")]
     pub client_jar_name: String
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InstanceObject {
+    pub id: u32,
+    pub game_id: String
 }
 
 #[derive(Serialize, Clone, Deserialize, Debug)]

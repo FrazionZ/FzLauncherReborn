@@ -9,6 +9,9 @@ import { ProgressSpinner } from 'primereact/progressspinner';
 import { MdOutlineError } from "react-icons/md";
 import SearchIcon from '../../../../assets/img/icons/search'
 import ImportIcon from '../../../../assets/img/icons/import'
+import { InputSwitch } from 'primereact/inputswitch'
+import { v4 as uuidv4 } from 'uuid';
+import { renameFile } from '@tauri-apps/api/fs';
 export default function Mods({ data }) {
 
     const fzContext = useFzContext();
@@ -32,7 +35,7 @@ export default function Mods({ data }) {
     const init = async () => {
         try {
             let entries = await readDir('MCVersions/' + data?.id + '/mods', { dir: BaseDirectory.AppData, recursive: true });
-            entries = entries.filter((f) => f.name.endsWith('.jar'))
+            entries = entries.filter((f) => f.name.endsWith('.jar') || f.name.endsWith('.disabled'))
             const mods = [];
             for await (const mod of entries) {
                 try {
@@ -43,7 +46,13 @@ export default function Mods({ data }) {
                     if (config_mod.authors.length > 0) {
                         author = typeof config_mod.authors[0] == "string" ? config_mod.authors[0] : config_mod.authors[0]?.name
                     }
-                    mods.push({ name: config_mod.name, author: author, icon: icon })
+
+                    const nameFile = mod.name;
+                    const modObj = { name: config_mod.name, author: author, icon: icon };
+                    modObj.uuid = uuidv4()
+                    modObj.name = nameFile.replace('.jar', '').replace('.disabled', '');
+                    modObj.state = !nameFile.endsWith('.disabled');
+                    mods.push(modObj)
                 } catch (e) {
 
                 }
@@ -53,7 +62,6 @@ export default function Mods({ data }) {
                 rpack.icon = icon;
                 rpack.name = rpack.name.replace('.zip', '')*/
             }
-            console.log(mods)
             setMods(mods)
         } catch (err) {
             setError(err.message)
@@ -65,6 +73,18 @@ export default function Mods({ data }) {
     function filterWithLike(array, property, value) {
         const regex = new RegExp(value, 'i'); // 'i' flag makes the search case-insensitive
         return array.filter(item => regex.test(item[property]));
+    }
+
+    async function handleChangeState(uuid, value) {
+        const copyEntries = [...mods];
+        let entry = copyEntries.find((m) => m.uuid == uuid);
+        if (entry == undefined) return;
+        entry.state = value;
+        const rootDir = 'MCVersions/' + data?.id + '/mods/'
+        const nameFileOriginal = rootDir + entry.name + (value ? '.disabled' : '.jar');
+        const nameFileNew = rootDir + entry.name + (value ? '.jar' : '.disabled');
+        await renameFile(nameFileOriginal, nameFileNew, { dir: BaseDirectory.AppData, recursive: true });
+        setMods(copyEntries);
     }
 
     return (
@@ -96,12 +116,11 @@ export default function Mods({ data }) {
                         </div>
                     </div>
                     :
-                    <div className="flex flex-col gap-4 w-full overflow-y-auto flex-1 pr-4">
+                    <div className="flex flex-col gap-4 w-full overflow-y-auto flex-1">
                         {filterWithLike(mods, 'name', query).map((mod, _) => {
-                            console.log(mod)
                             return (
-                                <div key={_} className="rpack bg-[var(--fzbg-1)] w-full p-4 rounded-lg">
-                                    <div className="flex gap-4">
+                                <div key={_} className="rpack flex bg-[var(--fzbg-1)] w-full p-4 rounded-lg">
+                                    <div className="flex flex-1 gap-4">
                                         <div className="flex">
                                             <img width={48} height={48} className="rounded-[4px]" src={`data:image/png;base64,${mod?.icon}`} alt="rpack_icon" />
                                         </div>
@@ -113,6 +132,9 @@ export default function Mods({ data }) {
                                                 by {mod?.author}
                                             </span>
                                         </div>
+                                    </div>
+                                    <div className="flex items-center">
+                                        <InputSwitch onChange={(e) => handleChangeState(mod?.uuid, e.value)} checked={mod.state} />
                                     </div>
                                 </div>
                             )

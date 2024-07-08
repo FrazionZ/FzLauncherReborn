@@ -26,9 +26,9 @@ export function FzContextProvider({ children }) {
         let unlistenDownloadTasks = undefined
         let unlistenExtractTasks = undefined
         async function initializeClass() {
+            setSession(await invoke('get_session', { sessionId: "msa_session" }))
             const instance = new FzVariable();
             await instance.init();
-
             const listProfilesGameInternal = await invoke('get_profiles_game');
             setProfilesGameInternal(listProfilesGameInternal)
 
@@ -75,6 +75,7 @@ export function FzContextProvider({ children }) {
     const disconnectSession = async() => {
         return new Promise(async(resolve, reject) => {
             setSession(null)
+            await invoke('delete_session', { sessionId: "msa_session" })
             return resolve()
         })
     }

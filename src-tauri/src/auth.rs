@@ -1,6 +1,7 @@
 pub(crate) struct Auth;
 
 use async_std::future::Future;
+use futures_util::future::err;
 use futures_util::FutureExt as _;
 use regex::Regex;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
@@ -103,7 +104,7 @@ struct MinecraftAuthRequest {
 
 #[derive(Debug, Deserialize, Serialize)]
 struct MinecraftAuthResponse {
-    access_token: String // Ajoutez d'autres champs selon la réponse JSON de l'API
+    access_token: String, // Ajoutez d'autres champs selon la réponse JSON de l'API
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -172,7 +173,6 @@ impl fmt::Display for AuthError {
     }
 }
 
-
 impl Error for AuthError {}
 
 impl Auth {
@@ -218,11 +218,40 @@ impl Auth {
         String::new()
     }
 
-    pub async fn authenticate(
-        authorization_code: &str
+    pub async fn login_from_refresh_tokens(
+        refresh_token: &str,
     ) -> Result<<Auth as Example>::MinecraftSession, Box<dyn Error>> {
-        println!("XboxLiveResponse Requesst");
+        let params = [
+            ("client_id", self::Auth::XBOX_LIVE_CLIENT_ID),
+            ("refresh_token", refresh_token),
+            ("redirect_uri", self::Auth::MICROSOFT_REDIRECTION_ENDPOINT),
+            ("grant_type", "refresh_token"),
+            ("scope", self::Auth::XBOX_LIVE_SERVICE_SCOPE),
+        ];
 
+        let refresh_token_response: String = reqwest::Client::new()
+            .post(self::Auth::MICROSOFT_TOKEN_ENDPOINT)
+            .form(&params)
+            .send()
+            .await?
+            .text()
+            .await?;
+
+        println!("EXAMPLE RTR RESPONSE: {}", refresh_token_response);
+
+        let refresh_token_response: RefreshTokenResponse = serde_json::from_str(&refresh_token_response)?;
+
+        match Self::authenticate(refresh_token_response).await {
+            Ok(data) => Ok(data),
+            Err(err) => Err(Box::new(AuthError::ReqwestError(
+                format!("Aucun profil Minecraft détecté sur ce compte {}", err),
+            ))),
+        }
+    }
+
+    pub async fn login_from_code(
+        authorization_code: &str,
+    ) -> Result<<Auth as Example>::MinecraftSession, Box<dyn Error>> {
         let params = [
             ("client_id", self::Auth::XBOX_LIVE_CLIENT_ID),
             ("code", authorization_code),
@@ -237,14 +266,27 @@ impl Auth {
             .await?
             .json()
             .await?;
-        
+
+        match Self::authenticate(refresh_token_response).await {
+            Ok(data) => Ok(data),
+            Err(err) => Err(Box::new(AuthError::ReqwestError(
+                "Aucun profil Minecraft détecté sur ce compte".to_string(),
+            ))),
+        }
+    }
+
+    pub async fn authenticate( 
+        refresh_response: RefreshTokenResponse,
+    ) -> Result<<Auth as Example>::MinecraftSession, Box<dyn Error>> {
+        println!("XboxLiveResponse Requesst"); 
+
         let xbox_live_response: XboxLiveResponse = reqwest::Client::new()
             .post(self::Auth::XBOX_LIVE_AUTHORIZATION_ENDPOINT)
             .json(&serde_json::json!({
                 "Properties": {
                     "AuthMethod": "RPS",
                     "SiteName": self::Auth::XBOX_LIVE_AUTH_HOST,
-                    "RpsTicket": refresh_token_response.access_token
+                    "RpsTicket": refresh_response.access_token
                 },
                 "RelyingParty": self::Auth::XBOX_LIVE_AUTH_RELAY,
                 "TokenType": "JWT"
@@ -340,7 +382,7 @@ impl Auth {
 
                         let mc_profile_session = MinecraftSession {
                             accessToken: access_token,
-                            refreshToken: refresh_token_response.refresh_token,
+                            refreshToken: refresh_response.refresh_token,
                             mcProfile: mc_profile_data,
                         };
 

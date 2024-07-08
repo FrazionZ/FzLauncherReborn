@@ -13,7 +13,7 @@ debug = true
 tauri-build = { version = "1", features = [] }
 
 [dependencies]
-tauri = { version = "1", features = [ "updater", "fs-read-dir", "dialog-open", "process-all", "fs-remove-file", "window-set-resizable", "window-set-max-size", "window-set-min-size", "window-set-size", "window-create", "dialog-message", "dialog", "notification-all", "fs-create-dir", "http-all", "window-unmaximize", "window-close", "window-minimize", "window-maximize", "window-set-position", "window-start-dragging", "window-set-decorations", "fs-exists", "fs-write-file", "fs-read-file", "path-all", "os-all", "shell-open"] }
+tauri = { version = "1", features = [ "fs-rename-file", "updater", "fs-read-dir", "dialog-open", "process-all", "fs-remove-file", "window-set-resizable", "window-set-max-size", "window-set-min-size", "window-set-size", "window-create", "dialog-message", "dialog", "notification-all", "fs-create-dir", "http-all", "window-unmaximize", "window-close", "window-minimize", "window-maximize", "window-set-position", "window-start-dragging", "window-set-decorations", "fs-exists", "fs-write-file", "fs-read-file", "path-all", "os-all", "shell-open"] }
 serde = { version = "1", features = ["derive"] }
 reqwest = { version = "0.11", features = ["blocking"] }
 tokio = { version = "1.37.0", features = ["full"] }
@@ -25,6 +25,8 @@ regex = "1.5"
 async-std = "1.10"
 thiserror = "1.0"
 base64 = "0.21.0"
+nix = "0.27.0"
+winapi = { version = "0.3", features = ["processthreadsapi", "handleapi", "winnt"] }
 [features]
 # This feature  is used for production builds or when a dev server is not specified, DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]  

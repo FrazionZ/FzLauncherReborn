@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useReducer, useRef, useState } from 'react'
 import BackgroundHeader from '../../../assets/img/wallpaper.png'
 import SuperButton from '../../../components/SuperButton'
 import { useFzContext } from '../../../FzContext'
@@ -14,6 +14,8 @@ import FzToast from '../../../components/FzToast';
 import Mods from './profiles/Mods'
 import Rpacks from './profiles/Rpacks'
 import Screens from './profiles/Screens'
+import { FaStop } from "react-icons/fa6";
+import { listen } from '@tauri-apps/api/event';
 
 //STATE_PROFILE_GAME! 0=Waiting, 1=Install, 2=Update, 3=Playable
 
@@ -56,8 +58,10 @@ export default function ProfileGame({ data }) {
     const [tabCurrent, setTab] = useState(data?.profile_type == "server" ? 'home' : 'mods')
     const [profileInit, setProfileInit] = useState()
     const [button, setButton] = useState({ state: false, label: "En attente" })
+    const pid_instance = useRef(null)
     const infosVersionManifest = useRef(undefined)
     const isConnected = useRef(fzContext.sessionMSA.auth !== undefined);
+    const [, forceUpdate] = useReducer((x) => x + 1, 0)
 
     useEffect(() => {
         isConnected.current = fzContext.sessionMSA.auth !== undefined
@@ -68,13 +72,21 @@ export default function ProfileGame({ data }) {
         console.log('Check install and has update available', data)
         updateStateProfileGame(0)
         setProfileInit(data?.id)
-        init().then((res) => {
+        let unlistenInstanceLaunch = () => { };
+        init().then(async(res) => {
             updateStateProfileGame(res.state)
+            unlistenInstanceLaunch = await listen('launch-game-profile-frazionz', async (event) => {
+                pid_instance.current = event.payload
+                if(event.payload == null) updateStateProfileGame(3)
+                forceUpdate()
+            });
         })
+        return () => {
+            unlistenInstanceLaunch();
+        }
     }, [data])
 
     useEffect(() => {
-
     }, [])
 
     const updateButton = (state, label, callback) => {
@@ -82,27 +94,37 @@ export default function ProfileGame({ data }) {
     }
 
     const updateStateProfileGame = (stateProfileGame) => {
-        switch (stateProfileGame) {
-            case 0:
-                updateButton(false, "En attente", () => { })
-                break;
-            case 1:
-                updateButton(true, "Installer", installProfileGame)
-                break;
-            case 2:
-                updateButton(true, "Mettre à jour", () => { })
-                break;
-            case 3:
-                updateButton(true, "Jouer", launchGame)
-                break;
-            default:
-                break;
+        if(!pid_instance.current) {
+            switch (stateProfileGame) {
+                case 0:
+                    updateButton(false, "En attente", () => { })
+                    break;
+                case 1:
+                    updateButton(true, "Installer", installProfileGame)
+                    break;
+                case 2:
+                    updateButton(true, "Mettre à jour", () => { })
+                    break;
+                case 3:
+                    updateButton(true, "Jouer", launchGame)
+                    break;
+                default:
+                    break;
+            }
         }
     }
 
     const init = async () => {
         return new Promise(async (resolve, reject) => {
             const dirVersion = await getDirectory()
+
+            console.log("CHECK INSTANCE GAME")
+            const test = await invoke('get_instance_from_gameid', { gameId: data?.id })
+            if(test !== null) {
+                pid_instance.current = test?.id
+                updateButton(false, "Jeu en cours..", () => {})
+                forceUpdate()
+            }
 
             const ivm = await getInfosVersionManifestMojang();
             infosVersionManifest.current = ivm;
@@ -116,6 +138,7 @@ export default function ProfileGame({ data }) {
             const isEmpty = await invoke('is_directory_empty', { directoryPath: dirVersion })
             if (isEmpty) return resolve({ state: 1 })
             return resolve({ state: 3 })
+
         })
     }
 
@@ -459,7 +482,11 @@ export default function ProfileGame({ data }) {
         await invoke('launch_minecraft', { data: data, assetIndex: ivm.assetIndex.id, minecraftArgs: ivm.minecraftArguments, minecraftJarPath: jarFile, gameDir: gameDir, runtimeDir: runtimeDir, assetsDir: assetsDir, nativesDir: nativesDir, libsDir: libsDir })
         updateButton(true, "Jouer", launchGame)
     }
-
+    
+    const stopInstance = async() => {
+        if(pid_instance.current == null) return;
+        await invoke('kill_process_command', { pid: pid_instance.current })
+    }
     /*
     <div className="flex flex-col px-10 pt-10 w-full" style={{ }}>
                 <div className="flex flex-col w-[38rem] gap-4">
@@ -533,6 +560,11 @@ export default function ProfileGame({ data }) {
                             </div>
                         </button>
                     </div>
+                    {pid_instance.current && 
+                        <button onClick={stopInstance} className='absolute right-0 bottom-0 top-0 my-auto mx-0 gap-0 rounded-full overflow-hidden text-center flex justify-center items-center w-[68px] h-[68px]' style={{ padding: '0', background: 'var(--gradient_red)' }}>
+                            <FaStop color='white' size={32} /> 
+                        </button>
+                    }
                 </div>
             </div>
             <style>

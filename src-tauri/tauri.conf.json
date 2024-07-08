@@ -44,7 +44,8 @@
         "writeFile": true,
         "createDir": true,
         "readDir": true,
-        "removeFile": true
+        "removeFile": true,
+        "renameFile": true
       },
       "window": {
         "all": false,
