@@ -24,7 +24,6 @@ function Updater() {
   }, [])
 
   const init = async() => {
-    const jv = await javaversion(await join(await appDataDir(), 'Launcher', 'runtime', 'bin', 'java'))
     const unlisten = await onUpdaterEvent(({ error, status }) => {
       console.log('Updater event', error, status)
     })
@@ -39,10 +38,10 @@ function Updater() {
         setStateUpdate('Mise à jour disponible, installation en cours..')
         await installUpdate()
       }else{
-        setLocation(jv == "no install" ? '/runtime' : '/connected')
+        setLocation('/login')
       }
     } catch (error) {
-      setLocation(jv == "no install" ? '/runtime' : '/connected')
+      setLocation('/login')
     }
     return unlisten;
   } 

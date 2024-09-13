@@ -2,12 +2,15 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod zip_reader;
+use libc::remove;
+use uuid::Uuid;
 use zip_reader::*;
 mod auth;
 use async_std::task::Task;
-use auth::{Auth, Example, MinecraftProfile, MinecraftSession, XboxLiveResponse};
 mod utils;
+use auth::{Auth, Example, MinecraftProfile, MinecraftSession, XboxLiveResponse};
 use utils::Utils;
+use utils::*;
 mod task_manager;
 use task_manager::{TaskManager, TaskManagerState, TaskObject, TypesTaskManager};
 mod interface_profile_game;
@@ -26,7 +29,7 @@ use std::io::Error as IOError;
 use std::io::{self, BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use tauri::api::path::app_data_dir;
+use tauri::api::path::{app_data_dir, resolve_path};
 use tauri::{
     async_runtime::spawn, InvokeError, LogicalSize, PhysicalPosition, PhysicalSize, Window,
     WindowUrl,
@@ -37,11 +40,11 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::oneshot;
 use tokio::task;
 
+use interface_profile_game::*;
 use std::process::{Command, Stdio};
+use task_manager::*;
 use tokio::io::AsyncBufReadExt;
 use tokio::process::{Child, Command as TokioCommand};
-
-use task_manager::*;
 use url::Url;
 use zip::ZipArchive;
 
@@ -186,18 +189,16 @@ async fn center_window(window: Window) -> Result<(), String> {
     Ok(())
 }
 
-
-
 #[cfg(unix)]
 fn start_process(
     command: String,
     args: Vec<String>,
 ) -> Result<std::process::Child, std::io::Error> {
     let mut child = Command::new(command)
-    .args(&args)
-    .stdout(Stdio::piped())
-    .stderr(Stdio::piped())
-    .spawn();
+        .args(&args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn();
 
     match child {
         Ok(child_res) => Ok(child_res),
@@ -212,15 +213,14 @@ fn start_process(
 ) -> Result<std::process::Child, std::io::Error> {
     use std::os::windows::process::CommandExt;
 
-
     const CREATE_NO_WINDOW: u32 = 0x08000000;
 
     let mut child = Command::new(command)
-    .args(&args)
-    .stdout(Stdio::piped())
-    .stderr(Stdio::piped())
-    .creation_flags(CREATE_NO_WINDOW)
-    .spawn();
+        .args(&args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn();
 
     match child {
         Ok(child_res) => Ok(child_res),
@@ -262,8 +262,8 @@ async fn start_child_process(
                 child.wait().map_err(|e| e.to_string())?;
 
                 Ok(())
-            },
-            Err(_) => Err("Error".to_string())
+            }
+            Err(_) => Err("Error".to_string()),
         }
     })
     .await;
@@ -284,7 +284,6 @@ async fn authenticate_microsoft(
     let (tx, rx) = oneshot::channel();
 
     // Créez une nouvelle fenêtre
-    println!("Authenticate Microsoft!");
     let url_obtain_token = Auth::url_obtain_token();
 
     let app_clone = app_handle.clone();
@@ -302,9 +301,7 @@ async fn authenticate_microsoft(
                     .to_string()
                     .starts_with(Auth::MICROSOFT_REDIRECTION_ENDPOINT)
                 {
-                    println!("{}", &url.to_string());
                     let authorization_code = Auth::get_extract_value(&url.to_string(), "code");
-                    println!("Authenticate Minecraft..");
                     let window = app_clone.get_window("auth_msa_window").unwrap();
                     let _ = window.close();
 
@@ -342,12 +339,10 @@ async fn authenticate_microsoft(
 
         _auth_window.await.unwrap_or_else(|e| Err(e.to_string()))
     } else {
-        println!("Authenticate Microsoft!2");
         let tx = Arc::new(Mutex::new(Some(tx)));
         let tx_clone = Arc::clone(&tx);
         let _auth_refresh_token = tauri::async_runtime::spawn(async move {
             let _ = tauri::async_runtime::spawn(async move {
-                println!("Authenticate Microsoft!3");
                 let source = data_source.clone().unwrap();
                 match Auth::login_from_refresh_tokens(&source).await {
                     Ok(minecraft_profile_session) => {
@@ -463,6 +458,7 @@ fn start_process_async(
     java_args: Vec<String>,
 ) -> Result<Child, std::io::Error> {
     const CREATE_NO_WINDOW: u32 = 0x08000000;
+    let combined_string = java_args.clone().join(" ");
     let child = TokioCommand::new(runtime_dir)
         .args(java_args)
         .stdout(Stdio::piped())
@@ -470,10 +466,71 @@ fn start_process_async(
         .creation_flags(CREATE_NO_WINDOW)
         .spawn();
 
+    println!("JAVA ARGS: {}", combined_string);
+
     match child {
         Ok(child_res) => Ok(child_res),
         Err(e) => Err(e),
     }
+}
+
+fn visit_dirs(dir: &Path) -> std::io::Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    if dir.is_dir() {
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                files.extend(visit_dirs(&path)?); // Appel récursif pour parcourir les sous-dossiers
+            } else {
+                files.push(path);
+            }
+        }
+    }
+    Ok(files)
+}
+
+#[tauri::command]
+async fn java_jar_spawn_command(
+    java_path: String,
+    class_path: String,
+    main_class: String,
+    args: Vec<String>,
+) -> Result<(), String> {
+    use tokio::io::{AsyncBufReadExt, BufReader};
+    use tokio::process::Command;
+    use tokio::process::Child;
+    // Crée et lance le processus enfant
+    let mut child: Child = Command::new(java_path)
+        .arg("-cp")
+        .arg(class_path)
+        .arg(main_class)
+        .args(args)
+        .stdout(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to spawn process: {}", e))?;
+
+    // Gère la sortie standard
+    if let Some(stdout) = child.stdout.take() {
+        let reader = BufReader::new(stdout);
+        let mut lines = reader.lines();
+
+        tokio::spawn(async move {
+            while let Ok(Some(line)) = lines.next_line().await {
+                println!("stdout: {}", line);
+            }
+        });
+    }
+
+    // Attend la fin du processus enfant
+    let status = child.wait().await.map_err(|e| format!("Failed to wait on child: {}", e))?;
+
+    // Vérifie si le processus s'est terminé avec succès
+    if !status.success() {
+        return Err(format!("Process exited with status: {}", status));
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -495,110 +552,175 @@ async fn launch_minecraft(
         main_class = &data.game.classMain;
     }
 
-    let paths = match fs::read_dir(&libs_dir) {
-        Ok(paths) => paths,
-        Err(err) => return Err(err.to_string()),
-    };
+    match visit_dirs(Path::new(&libs_dir)) {
+        Ok(files) => {
+            //-Xms1g -Xmx2g
+            let pathconfig = format!("{}/{}", game_dir, "config.json".to_string());
+            let configs = interface_profile_game::get_config_profile(&pathconfig);
+            let configs_clone = configs.unwrap();
 
-    let mut paths_vec: Vec<PathBuf> = Vec::new();
-    for path in paths {
-        if let Ok(entry) = path {
-            if entry.path().is_file() {
-                paths_vec.push(entry.path());
+            let ramAllocate = configs_clone.iter().find(|data| data.key == "ram_allocate");
+
+            let mut ramAllocateFormatted = "1".to_string();
+            let config_to_capture: Option<&ConfigObject>;
+            match ramAllocate {
+                Some(config) => {
+                    config_to_capture = Some(config); // Capture de la valeur dans la variable externe
+                }
+                None => {
+                    println!("No RAM allocation found");
+                    config_to_capture = None; // Affectation si aucun élément n'est trouvé
+                }
+            }
+
+            if let Some(config) = config_to_capture {
+                ramAllocateFormatted = config.value.clone()
+            }
+
+            let mut paths_string = String::new();
+            for path in files {
+                println!("{}", &path.to_string_lossy());
+                paths_string.push_str(&path.to_string_lossy());
+                paths_string.push(';');
+            }
+            paths_string.push_str(&minecraft_jar_path);
+
+            let session = get_session(state, "msa_session".to_string());
+            if let Ok(Some(session)) = session {
+                println!("SESSION {}", session.mcProfile.id);
+
+                let mut jvm_args_default = vec![
+                    "-Xms1g".to_string(),
+                    format!("-Xmx{}g", ramAllocateFormatted),
+                    format!("-Djava.library.path=\"{}\"", natives_dir.replace(" ", "")),
+                ];
+
+                let classpath_args = vec!["-cp".to_string(), paths_string, main_class.to_string()];
+
+                let game_args = vec![
+                    "--gameDir".to_string(),
+                    game_dir,
+                    "--assetsDir".to_string(),
+                    assets_dir,
+                    "--assetIndex".to_string(),
+                    assetIndex,
+                    "--username".to_string(),
+                    session.mcProfile.name,
+                    "--userType".to_string(),
+                    "msa".to_string(),
+                    "--accessToken".to_string(),
+                    session.accessToken,
+                    "--uuid".to_string(),
+                    session.mcProfile.id,
+                    "--version".to_string(),
+                    data.game.version,
+                ];
+
+                let jvm_args: Vec<String> = data
+                    .jvm_args
+                    .split(" ")
+                    .map(|s| s.to_string().replace(" ", ""))
+                    .collect();
+                let custom_args: Vec<String> = data
+                    .custom_args
+                    .split(" ")
+                    .map(|s| s.to_string().replace(" ", ""))
+                    .collect();
+
+                let modified_jvm_args: Vec<String> = jvm_args
+                    .into_iter() // Convertir en itérateur
+                    .map(|arg| {
+                        arg.replace("${classpath_separator}", ";")
+                            .replace("${library_directory}", &libs_dir)
+                    }) // Remplacer dans chaque chaîne
+                    .collect();
+
+                let mut java_args_final = jvm_args_default;
+
+                if data.jvm_args.clone().len() > 0 {
+                    java_args_final = java_args_final
+                        .iter()
+                        .chain(modified_jvm_args.iter())
+                        .chain(classpath_args.iter())
+                        .chain(game_args.iter())
+                        .chain(custom_args.iter())
+                        .cloned() // Clone each element during collection
+                        .collect();
+                } else {
+                    java_args_final = java_args_final
+                        .iter()
+                        .chain(classpath_args.iter())
+                        .chain(game_args.iter())
+                        .chain(custom_args.iter())
+                        .cloned() // Clone each element during collection
+                        .collect();
+                }
+
+                println!("RuntimeDir {}", runtime_dir);
+
+                match start_process_async(runtime_dir, java_args_final) {
+                    Ok(mut child) => {
+                        let pid = child.id().unwrap();
+
+                        let instance: InstanceObject = InstanceObject {
+                            id: pid,
+                            game_id: data.id,
+                        };
+
+                        let instance_clone = instance.clone();
+
+                        {
+                            println!("Add instance with pid {}", pid);
+                            let mut pinstance = state_clone.profiles_instance.lock().unwrap();
+                            pinstance.push(instance);
+                        }
+
+                        app.emit_all("launch-game-profile-frazionz", Some(instance_clone.clone()))
+                            .unwrap();
+
+                        let app_clone = app.clone();
+
+                        if let Some(stdout) = child.stdout.take() {
+                            let _ = tokio::spawn(async move {
+                                let reader = tokio::io::BufReader::new(stdout);
+                                let mut lines = reader.lines();
+                                while let Ok(Some(line)) = lines.next_line().await {
+                                    println!("stdout: {}", line);
+                                    let event_name =
+                                        format!("console-game-profile-frazionz-{}", pid);
+                                    app_clone.emit_all(&event_name, line).unwrap();
+                                }
+                            })
+                            .await;
+                        }
+
+                        if let Some(stderr) = child.stderr.take() {
+                            let _ = tokio::spawn(async move {
+                                let reader = tokio::io::BufReader::new(stderr);
+                                let mut lines = reader.lines();
+                                while let Ok(Some(line)) = lines.next_line().await {
+                                    eprintln!("stderr: {}", line);
+                                }
+                            })
+                            .await;
+                        }
+
+                        let mut pinstance = state_clone.profiles_instance.lock().unwrap();
+                        if let Some(pos) = pinstance.iter().position(|instance| instance.id == pid)
+                        {
+                            println!("Remove instance with pid {}", pid);
+                            pinstance.remove(pos);
+                            app.emit_all("launch-game-profile-frazionz", Some(()))
+                                .unwrap();
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to wait on child process: {}", e);
+                    }
+                }
             }
         }
-    }
-
-    let mut paths_string = String::new();
-    for path in paths_vec {
-        paths_string.push_str(&path.to_string_lossy());
-        paths_string.push(';');
-    }
-    paths_string.push_str(&minecraft_jar_path);
-
-    let session = get_session(state, "msa_session".to_string());
-    if let Ok(Some(session)) = session {
-        println!("SESSION {}", session.mcProfile.id);
-        let java_args = [
-            format!("-Djava.library.path={}", natives_dir),
-            "-DFabricMcEmu= net.minecraft.client.main.Main ".to_string(),
-            "-cp".to_string(),
-            paths_string,
-            main_class.to_string(),
-            "--gameDir".to_string(),
-            game_dir,
-            "--assetsDir".to_string(),
-            assets_dir,
-            "--assetIndex".to_string(),
-            assetIndex,
-            "--username".to_string(),
-            session.mcProfile.name,
-            "--userType".to_string(),
-            "msa".to_string(),
-            "--accessToken".to_string(),
-            session.accessToken,
-            "--uuid".to_string(),
-            session.mcProfile.id,
-            "--version".to_string(),
-            data.game.version,
-        ];
-
-        println!("RuntimeDir {}", runtime_dir);
-
-        match start_process_async(runtime_dir, java_args.to_vec()) {
-            Ok(mut child) => {
-
-                let pid = child.id().unwrap();
-        
-                let instance = InstanceObject {
-                    id: pid,
-                    game_id: data.id,
-                };
-        
-                {
-                    println!("Add instance with pid {}", pid);
-                    let mut pinstance = state_clone.profiles_instance.lock().unwrap();
-                    pinstance.push(instance);
-                }
-        
-                app.emit_all("launch-game-profile-frazionz", Some(pid))
-                    .unwrap();
-        
-                if let Some(stdout) = child.stdout.take() {
-                    let _ = tokio::spawn(async move {
-                        let reader = tokio::io::BufReader::new(stdout);
-                        let mut lines = reader.lines();
-                        while let Ok(Some(line)) = lines.next_line().await {
-                            println!("stdout: {}", line);
-                        }
-                    })
-                    .await;
-                }
-        
-                if let Some(stderr) = child.stderr.take() {
-                    let _ = tokio::spawn(async move {
-                        let reader = tokio::io::BufReader::new(stderr);
-                        let mut lines = reader.lines();
-                        while let Ok(Some(line)) = lines.next_line().await {
-                            eprintln!("stderr: {}", line);
-                        }
-                    })
-                    .await;
-                }
-        
-                let mut pinstance = state_clone.profiles_instance.lock().unwrap();
-                if let Some(pos) = pinstance.iter().position(|instance| instance.id == pid) {
-                    println!("Remove instance with pid {}", pid);
-                    pinstance.remove(pos);
-                    app.emit_all("launch-game-profile-frazionz", Some(()))
-                        .unwrap();
-                }
-            },
-            Err(e) => {
-                eprintln!("Failed to wait on child process: {}", e);
-            }
-        }
-
+        Err(e) => println!("Erreur: {}", e),
     }
 
     Ok(())
@@ -673,6 +795,24 @@ fn get_profiles(app_handle: tauri::AppHandle) -> Result<Vec<Profile>, String> {
 }
 
 #[tauri::command]
+fn get_profiles_game_user(app_handle: tauri::AppHandle) -> Result<Vec<ProfileGame>, String> {
+    let app_data_path =
+        app_data_dir(&app_handle.config()).ok_or("Failed to get app data directory")?;
+    let file_path = app_data_path.join("Launcher/game_profiles.json");
+
+    // Vérifie si le fichier existe
+    if !file_path.exists() {
+        return Ok(vec![]); // Retourne une liste vide si le fichier n'existe pas encore
+    }
+
+    let file_content = fs::read_to_string(&file_path).map_err(|e| e.to_string())?;
+    let profiles: Vec<ProfileGame> =
+        serde_json::from_str(&file_content).map_err(|e| e.to_string())?;
+
+    Ok(profiles)
+}
+
+#[tauri::command]
 fn open_directory(path: String) {
     #[cfg(target_os = "windows")]
     {
@@ -732,9 +872,72 @@ async fn read_base64_from_zip_sync(zip_path: String, file_name: String) -> Resul
     zip_reader::read_base64_from_zip(&zip_path, &file_name).await
 }
 
+#[tauri::command]
+async fn read_base64_from_file_sync(file_path: String) -> Result<String, String> {
+    Utils::read_base64_from_file(&file_path).await
+}
+
+#[tauri::command]
+async fn add_profile_custom(
+    _file_path: String,
+    _version: String,
+    _uuid: String,
+    _class_name: String,
+    _modloader_version: String,
+    _name: String,
+    _icon: String,
+    _game_type: String,
+    _profile_type: String,
+    _jre: String,
+    _jvm_args: String,
+    _custom_args: String,
+) -> Result<ProfileGame, String> {
+    let _github = Github {
+        repo: "".to_string(),
+    };
+
+    let _custom_client = CustomClient { github: _github };
+
+    let _game = Game {
+        version: _version,
+        modloader_version: Some(_modloader_version),
+        custom_client: Some(_custom_client),
+        classMain: _class_name,
+        client_jar_name: "minecraft.jar".to_string(),
+    };
+
+    let _profile = ProfileGame {
+        name: _name.to_string(),
+        id: _uuid,
+        description: "".to_string(),
+        icon: _icon,
+        game: _game,
+        jre: _jre,
+        game_type: _game_type,
+        profile_type: _profile_type,
+        jvm_args: _jvm_args.to_string(),
+        custom_args: _custom_args.to_string(),
+    };
+
+    let _profile_clone = _profile.clone();
+
+    let _ = add_profiles_list(&_file_path, _profile).await;
+
+    Ok(_profile_clone.clone())
+}
+
+#[tauri::command]
+async fn remove_profile(file_path: String, uuid: String) -> Result<String, String> {
+    let _ = remove_profiles_list(&file_path, uuid)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(String::new())
+}
+
 #[cfg(unix)]
 fn kill_process(pid: i32) -> Result<(), String> {
-    use libc::{c_int};
+    use libc::c_int;
     type pid_t = i32;
     extern "C" {
         fn kill(pid: pid_t, sig: c_int) -> c_int;
@@ -791,7 +994,27 @@ fn kill_process_command(pid: u32) -> Result<(), String> {
     kill_process(pid)
 }
 
+async fn rename_folder(old_path: &str, new_path: &str) -> std::io::Result<()> {
+    // Convertir les chemins en Path
+    let old_path = Path::new(old_path);
+    let new_path = Path::new(new_path);
+
+    // Renommer le dossier
+    tokio::fs::rename(old_path, new_path).await?;
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn rename_directory(old_path: String, new_path: String) -> Result<(), String> {
+    println!("Rename: {} to {}", old_path, new_path);
+    let _ = rename_folder(&old_path, &new_path).await;
+
+    Ok(())
+}
+
 fn main() {
+    use tauri::api::path::app_data_dir;
     let url = "https://download.frazionz.net/internal_profiles.json";
     let profiles_game: Vec<ProfileGame> = match Utils::fetch_url_content(url) {
         Ok(profiles_game) => profiles_game,
@@ -823,6 +1046,7 @@ fn main() {
             create_session,
             get_session,
             delete_session,
+            get_profiles,
             get_profiles_game,
             is_directory_empty,
             launch_minecraft,
@@ -838,7 +1062,16 @@ fn main() {
             read_file_from_zip_sync,
             read_base64_from_zip_sync,
             get_instance_from_gameid,
-            kill_process_command
+            kill_process_command,
+            init_config_profile,
+            update_config_profile,
+            read_base64_from_file_sync,
+            get_profiles_game_user,
+            add_profile_custom,
+            remove_profile,
+            get_java_data,
+            rename_directory,
+            java_jar_spawn_command
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

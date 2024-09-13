@@ -24,6 +24,9 @@ export default class FzVariable {
   
         this.dirFzLauncherDatas = await join(this.dirFzLauncherRoot, 'Launcher')
         if (!await exists(this.dirFzLauncherDatas)) await createDir(this.dirFzLauncherDatas)
+          
+        this.dirFzLauncherProfileIcons = await join(this.dirFzLauncherRoot, 'Launcher', 'icons')
+        if (!await exists(this.dirFzLauncherProfileIcons)) await createDir(this.dirFzLauncherProfileIcons)
 
         this.dirFzMetaDatas = await join(this.dirFzLauncherRoot, 'Metas')
         if (!await exists(this.dirFzMetaDatas)) await createDir(this.dirFzMetaDatas)
@@ -39,6 +42,9 @@ export default class FzVariable {
   
         this.shelfFzLauncherProfiles = await join(this.dirFzLauncherDatas, 'profiles.json')
         if (!await exists(this.shelfFzLauncherProfiles)) await writeTextFile(this.shelfFzLauncherProfiles, "[]", {})
+  
+          this.shelfFzLauncherGameProfiles = await join(this.dirFzLauncherDatas, 'game_profiles.json')
+          if (!await exists(this.shelfFzLauncherGameProfiles)) await writeTextFile(this.shelfFzLauncherGameProfiles, "[]", {})
   
         this.dirFzLauncherSkins = await join(this.dirFzLauncherDatas, 'skins')
         if (!await exists(this.dirFzLauncherSkins)) await createDir(this.dirFzLauncherSkins)

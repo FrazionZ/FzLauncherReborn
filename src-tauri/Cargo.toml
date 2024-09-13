@@ -13,10 +13,10 @@ debug = true
 tauri-build = { version = "1", features = [] }
 
 [dependencies]
-tauri = { version = "1", features = [ "fs-rename-file", "updater", "fs-read-dir", "dialog-open", "process-all", "fs-remove-file", "window-set-resizable", "window-set-max-size", "window-set-min-size", "window-set-size", "window-create", "dialog-message", "dialog", "notification-all", "fs-create-dir", "http-all", "window-unmaximize", "window-close", "window-minimize", "window-maximize", "window-set-position", "window-start-dragging", "window-set-decorations", "fs-exists", "fs-write-file", "fs-read-file", "path-all", "os-all", "shell-open"] }
+tauri = { version = "1", features = [ "shell-execute", "shell-sidecar", "fs-remove-dir", "protocol-all", "fs-copy-file", "fs-rename-file", "updater", "fs-read-dir", "dialog-open", "process-all", "fs-remove-file", "window-set-resizable", "window-set-max-size", "window-set-min-size", "window-set-size", "window-create", "dialog-message", "dialog", "notification-all", "fs-create-dir", "http-all", "window-unmaximize", "window-close", "window-minimize", "window-maximize", "window-set-position", "window-start-dragging", "window-set-decorations", "fs-exists", "fs-write-file", "fs-read-file", "path-all", "os-all", "shell-open"] }
 serde = { version = "1", features = ["derive"] }
 reqwest = { version = "0.11", features = ["blocking"] }
-tokio = { version = "1.37.0", features = ["full"] }
+tokio = { version = "1.38.1", features = ["full"] }
 futures-util = "0.3"
 zip = "0.5"
 serde_json = "1"
@@ -27,6 +27,11 @@ thiserror = "1.0"
 base64 = "0.21.0"
 nix = "0.25.0"
 libc = "0.2"
+uuid = { version = "1.10.0", features = [
+    "v4",                # Lets you generate random UUIDs
+    "fast-rng",          # Use a faster (but still sufficiently random) RNG
+    "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
+] }
 winapi = { version = "0.3", features = ["processthreadsapi", "handleapi", "winnt"] }
 [features]
 # This feature  is used for production builds or when a dev server is not specified, DO NOT REMOVE!!

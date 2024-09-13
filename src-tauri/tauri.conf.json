@@ -14,7 +14,16 @@
       "all": false,
       "shell": {
         "all": false,
-        "open": true
+        "open": true,
+        "sidecar": true,
+        "execute": true,
+        "scope": [
+          {
+            "name": "all",
+            "cmd": "**/java",
+            "args": ["**/*"]
+          }
+        ]
       },
       "os": {
         "all": true
@@ -28,6 +37,8 @@
           "$APPDATA",
           "$APPDATA/Launcher",
           "$APPDATA/Launcher/*",
+          "$APPDATA/Launcher/**",
+          "$APPDATA/Launcher/**/*",
           "$APPDATA/Metas",
           "$APPDATA/Metas/*",
           "$APPDATA/Metas/**",
@@ -44,8 +55,10 @@
         "writeFile": true,
         "createDir": true,
         "readDir": true,
+        "removeDir": true,
         "removeFile": true,
-        "renameFile": true
+        "renameFile": true,
+        "copyFile": true 
       },
       "window": {
         "all": false,
@@ -69,7 +82,8 @@
           "http://localhost/*",
           "https://api.frazionz.net/*",
           "https://frazionz.net/*",
-          "https://download.frazionz.net/*"
+          "https://download.frazionz.net/*",
+          "https://api.azul.com/*"
         ]
       },
       "notification": {
@@ -82,6 +96,20 @@
       },
       "process": {
         "all": true
+      },
+      "protocol": {
+        "all": true,
+        "asset": true,
+        "assetScope": [
+          "file:///**",
+          "C:/**",
+          "C://**",
+          "asset://**",
+          "$APPDATA/Launcher",
+          "$APPDATA/Launcher/*",
+          "$APPDATA/Launcher/**",
+          "$APPDATA/Launcher/**/*"
+        ]
       }
     },
     "windows": [
@@ -96,7 +124,7 @@
       }
     ],
     "security": {
-      "csp": ""
+      "csp": "img-src tauri: https: data: blob: 'unsafe-inline' asset: https://asset.localhost;"
     },
     "bundle": {
       "active": true,

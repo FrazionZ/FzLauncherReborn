@@ -1,11 +1,20 @@
-import { invoke } from "@tauri-apps/api/tauri";
+import { invoke, convertFileSrc } from "@tauri-apps/api/tauri";
 import { LogicalSize, PhysicalSize, appWindow } from "@tauri-apps/api/window";
-import { useEffect, useState } from "react";
+import { removeDir } from "@tauri-apps/api/fs";
+import { useEffect, useRef, useState } from "react";
 import { useFzContext } from "../../FzContext";
 import ProfileGame from "./subpages/ProfileGame";
 import TaskManager from "./subpages/TaskManager";
 import { FaCubesStacked } from "react-icons/fa6";
 import HomeIcon from '../../assets/img/icons/home.png'
+import AddIcon from '../../assets/img/icons/add.png'
+import { Dialog } from "primereact/dialog";
+import AddProfilDialog from "../../components/AddProfilDialog";
+import DefaultIcon from "../../assets/img/mc_logo.png"
+import { ContextMenu } from 'primereact/contextmenu';
+import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
+import FzToast from "../../components/FzToast";
+import { join } from "@tauri-apps/api/path";
 
 export default function Layout() {
 
@@ -13,6 +22,7 @@ export default function Layout() {
     const [profileGameCurrent, setProfileGameCurrent] = useState(0)
     const [profilesGame, setProfilesGame] = useState([])
     const [subpage, setSubpage] = useState(undefined);
+    const [showAddProfileGame, setShowAddProfileGame] = useState(false);
 
     const subpages = [
         {
@@ -50,7 +60,7 @@ export default function Layout() {
 
     useEffect(() => {
 
-    }, [fzContext.profilesGameInternal])
+    }, [fzContext.profilesGameCustom])
 
     useEffect(() => {
 
@@ -60,15 +70,62 @@ export default function Layout() {
 
     }, [fzContext.sessionMSA.auth])
 
-    const NavItem = ({ sp, children, onClick }) => {
+    const NavItem = ({ isActive, children, onClick, onContextMenu }) => {
         return (
-            <div onClick={onClick} className={`${subpage == sp ? "bg-[#1a1d21]" : "bg-transparent"} profile flex justify-center items-center rounded-lg hover:bg-[#1A1D21] w-[48px] h-[48px]`}>
+            <div onClick={onClick} onContextMenu={onContextMenu} className={`${isActive ? "bg-[#1a1d21]" : "bg-transparent"} profile flex justify-center items-center rounded-lg hover:bg-[#1A1D21] w-[48px] h-[48px]`}>
                 {children}
             </div>
         )
     }
 
     const subpageCurrent = subpages.find((sp) => sp.key == subpage)
+
+    const NavItemProfileGame = ({profile, key, index}) => {
+        const cm = useRef(null);
+
+        const accept = async() => {
+            //removeDir
+            await invoke('remove_profile', { filePath: fzContext.fzVariable.shelfFzLauncherGameProfiles, uuid: profile.id })
+            await removeDir(await join(fzContext.fzVariable.dirFzLauncherMCVersions, profile?.id), { recursive: true })
+            await fzContext.loadProfilesGame() 
+            if(profileGameCurrent == key) {
+                setProfileGameCurrent(0);
+            }
+            FzToast.success('Le profil a bien été supprimé')
+        }
+    
+        const reject = () => {
+            
+        }
+
+        const items = [
+            { label: 'Éditer', command: () => { alert('Not available') }},
+            { label: 'Supprimer', command: (e) => { 
+                confirmDialog({
+                    message: 'Êtes-vous sûr de vouloir supprimer ce profil de jeu ? En continuant, vous prenez conscience que les données liées à ce profil seront supprimées.',
+                    header: 'Confirmation de suppression',
+                    icon: 'pi pi-info-circle',
+                    defaultFocus: 'reject',
+                    rejectClassName: 'default',
+                    contentClassName: 'p-0',
+                    acceptClassName: 'danger hover:bg-[green]',
+                    acceptLabel: "Oui, supprimer",
+                    rejectLabel: "Non",
+                    accept,
+                    reject
+                });
+            }}
+        ];
+
+        return (
+            <div className="flex">
+                {profile.profile_type !== "server" && <ContextMenu model={items} ref={cm} breakpoint="767px" />}
+                <NavItem isActive={profileGameCurrent == index} sp={undefined} onContextMenu={(e) => profile.profile_type !== "server" && cm.current.show(e)} onClick={() => { setProfileGameCurrent(index); setSubpage(undefined); }}>
+                    <img src={profile?.profile_type == "server" ? profile.icon : profile.icon == "default" ? DefaultIcon : convertFileSrc(profile.icon, "asset")} onError={(e) => e.target.src = DefaultIcon} width={32} height={32} alt="" />
+                </NavItem>
+            </div>
+        )
+    }
 
     return (
         <div className="flex h-full">
@@ -77,18 +134,19 @@ export default function Layout() {
                     <img src={HomeIcon} width={32} height={32} alt="home_icon" />
                 </NavItem>
                 <div className="border-b-2 border-[#1A1D21] w-12 h-[2px]" />
-                <div className="profiles flex flex-col items-center flex-1 gap-2">
-
+                <div className="profiles flex flex-col items-center flex-1 gap-2"> 
+                    <ConfirmDialog closable={false} />
                     {fzContext.profilesGameInternal.map((profile, _) => {
                         return (
-                            <NavItem sp={undefined} key={_} onClick={() => { setProfileGameCurrent(_); setSubpage(undefined); }}>
-                                <img src={profile.icon} width={32} height={32} alt="" />
-                            </NavItem>
+                            <NavItemProfileGame key={_} index={_} profile={profile} />
                         )
                     })}
                 </div>
                 <div className="actions flex flex-col gap-2">
-                    <NavItem sp={"tasks"} onClick={() => { setSubpage('tasks') }}>
+                    <NavItem isActive={"add_profile" == subpage} onClick={() => { setShowAddProfileGame(true) }} sp={"add_profile"}>
+                        <img src={AddIcon} width={32} height={32} alt="home_icon" />
+                    </NavItem>
+                    <NavItem isActive={"tasks" == subpage} sp={""} onClick={() => { setSubpage('tasks') }}>
                         <FaCubesStacked color="white" size={32} />
                     </NavItem>
                 </div>
@@ -111,6 +169,7 @@ export default function Layout() {
                     )
                 })}
             </div>
+            <AddProfilDialog isOpen={showAddProfileGame} setIsOpen={setShowAddProfileGame} />
         </div>
     )
 

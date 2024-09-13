@@ -1,0 +1,76 @@
+.minecraft-text {
+    font-family: 'Courier New', Courier, monospace;
+    /* Optionnel, pour un look Minecraft */
+}
+
+.minecraft-text.black {
+    color: #000000;
+}
+
+.minecraft-text.dark_blue {
+    color: #0000AA;
+}
+
+.minecraft-text.dark_green {
+    color: #00AA00;
+}
+
+.minecraft-text.dark_aqua {
+    color: #00AAAA;
+}
+
+.minecraft-text.dark_red {
+    color: #AA0000;
+}
+
+.minecraft-text.dark_purple {
+    color: #AA00AA;
+}
+
+.minecraft-text.gold {
+    color: #FFAA00;
+}
+
+.minecraft-text.gray {
+    color: #AAAAAA;
+}
+
+.minecraft-text.dark_gray {
+    color: #555555;
+}
+
+.minecraft-text.blue {
+    color: #5555FF;
+}
+
+.minecraft-text.green {
+    color: #55FF55;
+}
+
+.minecraft-text.aqua {
+    color: #55FFFF;
+}
+
+.minecraft-text.red {
+    color: #FF5555;
+}
+
+.minecraft-text.light_purple {
+    color: #FF55FF;
+}
+
+.minecraft-text.yellow {
+    color: #FFFF55;
+}
+
+.minecraft-text.white {
+    color: #FFFFFF;
+}
+
+.minecraft-text.bold {
+    font-weight: bold;
+}
+
+.minecraft-text.italic {
+    font-style: italic;
+}

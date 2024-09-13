@@ -1,4 +1,4 @@
-import { readDir, BaseDirectory } from "@tauri-apps/api/fs"
+import { readDir, BaseDirectory, removeFile } from "@tauri-apps/api/fs"
 import { join } from "@tauri-apps/api/path"
 import { useEffect, useState } from "react"
 import { useFzContext } from "../../../../FzContext"
@@ -12,6 +12,7 @@ import ImportIcon from '../../../../assets/img/icons/import'
 import { InputSwitch } from 'primereact/inputswitch'
 import { v4 as uuidv4 } from 'uuid';
 import { renameFile } from '@tauri-apps/api/fs';
+import { HiTrash } from "react-icons/hi2";
 export default function Mods({ data }) {
 
     const fzContext = useFzContext();
@@ -87,61 +88,96 @@ export default function Mods({ data }) {
         setMods(copyEntries);
     }
 
+    async function removeMods(uuid) {
+        let copyEntries = [...mods];
+        const entry = copyEntries.find((m) => m.uuid == uuid);
+        if (entry == undefined) return;
+        const rootDir = 'MCVersions/' + data?.id + '/mods/'
+        const nameFile = rootDir + entry.name + (entry.state ? '.jar' : '.disabled');
+        await removeFile(nameFile, { dir: BaseDirectory.AppData, recursive: true })
+        copyEntries = copyEntries.filter((r) => r.uuid !== entry.uuid);
+        setMods(copyEntries);
+    }
+
     return (
-        <div className="flex flex-col gap-4 h-full">
-            <div className="flex w-full gap-4">
-                <div className="flex-1">
-                    <div className="relative">
-                        <div className="absolute top-4 left-4 bg-[var(--fzbg-1)]"><SearchIcon /></div>
-                        <input placeholder="Rechercher" value={query} onChange={(e) => { setQuery(e.target.value) }} className="w-full indent-12" type="text" />
+        <>
+            <div className="flex flex-col gap-4 h-full">
+                <div className="flex w-full gap-4">
+                    <div className="flex-1">
+                        <div className="relative">
+                            <div className="absolute top-4 left-4 bg-[var(--fzbg-1)]"><SearchIcon /></div>
+                            <input placeholder="Rechercher" value={query} onChange={(e) => { setQuery(e.target.value) }} className="w-full indent-12" type="text" />
+                        </div>
                     </div>
+                    <button className="default" onClick={openDirectory}>Fichiers</button>
+                    <button style={{ background: 'var(--gradient_green)' }}><ImportIcon /> <span className="text-[#173117]">Importer</span></button>
                 </div>
-                <button className="default" onClick={openDirectory}>Fichiers</button>
-                <button style={{ background: 'var(--gradient_green)' }}><ImportIcon /> <span className="text-[#173117]">Importer</span></button>
-            </div>
-            {!load ?
-                <div className="flex flex-col gap-4 w-full h-full justify-center items-center">
-                    <ProgressSpinner style={{ width: '80px', height: '80px' }} strokeWidth="8" animationDuration=".5s" />
-                    <div className="flex flex-col gap-2">
-                        <span className="text-center leading-5">Chargement de vos mods</span>
-                    </div>
-                </div>
-                :
-                error ?
-                    <div className="flex flex-col gap-8 w-full h-full justify-center items-center">
-                        <MdOutlineError size={80} color="var(--color-2)" />
-                        <div className="flex justify-center items-center flex-col gap-0">
-                            <span className="text-center leading-5">Une erreur s'est produite lors de la lecture de vos screens</span>
-                            <span className="text-[14px] text-center font-light whitespace-nowrap overflow-hidden text-ellipsis w-[650px]">{error}</span>
+                {!load ?
+                    <div className="flex flex-col gap-4 w-full h-full justify-center items-center">
+                        <ProgressSpinner style={{ width: '80px', height: '80px' }} strokeWidth="8" animationDuration=".5s" />
+                        <div className="flex flex-col gap-2">
+                            <span className="text-center leading-5">Chargement de vos mods</span>
                         </div>
                     </div>
                     :
-                    <div className="flex flex-col gap-4 w-full overflow-y-auto flex-1">
-                        {filterWithLike(mods, 'name', query).map((mod, _) => {
-                            return (
-                                <div key={_} className="rpack flex bg-[var(--fzbg-1)] w-full p-4 rounded-lg">
-                                    <div className="flex flex-1 gap-4">
-                                        <div className="flex">
-                                            <img width={48} height={48} className="rounded-[4px]" src={`data:image/png;base64,${mod?.icon}`} alt="rpack_icon" />
+                    error ?
+                        <div className="flex flex-col gap-8 w-full h-full justify-center items-center">
+                            <MdOutlineError size={80} color="var(--color-2)" />
+                            <div className="flex justify-center items-center flex-col gap-0">
+                                <span className="text-center leading-5">Une erreur s'est produite lors de la lecture de vos screens</span>
+                                <span className="text-[14px] text-center font-light whitespace-nowrap overflow-hidden text-ellipsis w-[650px]">{error}</span>
+                            </div>
+                        </div>
+                        :
+                        <div className="flex flex-col gap-4 w-full overflow-y-auto flex-1">
+                            {filterWithLike(mods, 'name', query).map((mod, _) => {
+                                return (
+                                    <div key={_} className="rpack flex bg-[var(--fzbg-1)] w-full p-4 rounded-lg">
+                                        <div className="flex flex-1 gap-4">
+                                            <div className="flex">
+                                                <img width={48} height={48} className="rounded-[4px]" src={`data:image/png;base64,${mod?.icon}`} alt="rpack_icon" />
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="text-[#FFFFFF] text-[18px] font-bold">
+                                                    {mod?.name}
+                                                </span>
+                                                <span className="text-[#CDCDCD] text-[14px] font-bold">
+                                                    by {mod?.author}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <div className="flex flex-col">
-                                            <span className="text-[#FFFFFF] text-[18px] font-bold">
-                                                {mod?.name}
-                                            </span>
-                                            <span className="text-[#CDCDCD] text-[14px] font-bold">
-                                                by {mod?.author}
-                                            </span>
+                                        <div className="flex items-center gap-4">
+                                            <InputSwitch onChange={(e) => handleChangeState(mod?.uuid, e.value)} checked={mod.state} />
+                                            <div onClick={() => { removeMods(mod?.uuid) }} className="flex cursor-pointer justify-center items-center bg-[#484C53] hover:bg-[var(--color-red)] transition-all" style={{ borderRadius: 4, width: '48px', height: '48px', padding: 0 }}>
+                                                <HiTrash color="white" size={28} />
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="flex items-center">
-                                        <InputSwitch onChange={(e) => handleChangeState(mod?.uuid, e.value)} checked={mod.state} />
-                                    </div>
-                                </div>
-                            )
-                        })}
-                    </div>
-            }
-        </div>
+                                )
+                            })}
+                        </div>
+                }
+            </div>
+
+            <style>
+                {`
+                    div[data-pc-name="inputswitch"][aria-checked="false"] span[data-pc-section="slider"] {
+                        background: #484C53;
+                    }
+                    span[data-pc-section="slider"] {
+                        background: var(--btn-gradient);
+                        border: none;
+                        outline: none;
+                    }
+                    div[data-pc-name="inputswitch"][aria-checked="false"] span[data-pc-section="slider"]::before {
+                        background: #848E95 !important;
+                    }
+                    div[data-pc-name="inputswitch"][aria-checked="true"] span[data-pc-section="slider"]::before {
+                        background: white !important;
+                    }
+                `}
+            </style>
+        </>
     )
 
 }

@@ -135,9 +135,8 @@ main {
 }
 
 .login {
-    margin: 0em 0em 6em;
+    margin: 0em;
     color: var(--text);
-    height: calc(100vh - 10.9em);
 }
 
 .login .head h2,
@@ -449,8 +448,8 @@ label {
     font-family: 'Poppins';
     font-style: normal;
     font-weight: 700;
-    font-size: 24px;
-    line-height: 36px;
+    font-size: 18px;
+    line-height: 18px;
     color: #FFFFFF;
     display: block;
     margin-bottom: 8px;
@@ -2905,7 +2904,11 @@ input[type="range"]::-webkit-slider-thumb {
     position: absolute;
     cursor: pointer;
     top: 24px;
-    left: -32px;
+    left: -24px;
+}
+.lmclose.right {
+    left: auto; 
+    right: -24px;
 }
 .lateralModal .title {
     color: #FFF;

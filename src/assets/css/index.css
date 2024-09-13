@@ -660,7 +660,7 @@ ul[role="listbox"] li[aria-selected="true"]{
   display: flex;
   flex-direction: column;
   gap: 40px;
-  margin: 0px 0 50px !important;
+  margin: 0px !important;
   justify-content: center;
 }
 .login .heading {
@@ -929,4 +929,63 @@ div[role="tooltip"] div[data-testid="flowbite-tooltip-arrow"] {
 }
 .listProfiles .card .profile:hover {
   background-color: var(--fzbg-1);
+}
+
+div[data-pc-name="inputswitch"][aria-checked="false"] span[data-pc-section="slider"] {
+  background: #484C53;
+}
+span[data-pc-section="slider"] {
+  background: var(--btn-gradient);
+  border: none;
+  outline: none;
+}
+div[data-pc-section="mask"] {
+  backdrop-filter: blur(12px);
+}
+div[data-pc-name="inputswitch"][aria-checked="false"] span[data-pc-section="slider"]::before {
+  background: #848E95 !important;
+}
+div[data-pc-name="inputswitch"][aria-checked="true"] span[data-pc-section="slider"]::before {
+  background: white !important;
+}
+div[data-pc-name="dialog"] { 
+  border: none !important;
+}
+div[data-pc-name="dialog"] span[data-pc-section="message"] {
+  margin: 0;
+}
+div[data-pc-name="dialog"] div[data-pc-section="header"], div[data-pc-name="dialog"] div[data-pc-section="content"], div[data-pc-name="dialog"] div[data-pc-section="footer"] {
+  background-color: var(--fzbg-4) !important;
+}
+div[data-pc-name="dialog"] button[data-pc-name="button"]:hover {
+  background-color: var(--fzbg-1) !important;
+}
+div[data-pc-name="dialog"] button.danger[data-pc-name="button"]:hover {
+  background-color: var(--color-red) !important;
+}
+div[data-pc-name="contextmenu"] {
+  background-color: var(--fzbg-4);
+}
+
+hr {
+  border-color: var(--fzbg-1) !important;
+}
+
+circle.progress-spinner-circle {
+  animation: p-progress-spinner-dash 1.5s ease-in-out infinite, fz-p-progress-spinner-color 6s ease-in-out infinite;
+}
+
+@keyframes fz-p-progress-spinner-color {
+  100%, 0% {
+    stroke: var(--color-2);
+  }
+  40% {
+    stroke: var(--color-2);
+  }
+  66% {
+    stroke: var(--color-2);
+  }
+  80%, 90% {
+    stroke: var(--color-2);
+  }
 }

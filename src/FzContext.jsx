@@ -3,6 +3,10 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import FzVariable from './components/FzVariable';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/tauri';
+import axios from 'axios';
+import { exists } from '@tauri-apps/api/fs';
+import { join } from '@tauri-apps/api/path';
+import GameManager from './utils/GameManager';
 // Créer le contexte
 const FzContext = createContext();
 
@@ -11,9 +15,12 @@ export function FzContextProvider({ children }) {
 
     const [session, setSession] = useState(null)
     const [profilesGameInternal, setProfilesGameInternal] = useState([])
+    const [profilesGameCustom, setProfilesGameCustom] = useState([])
     const [tasks, setTasks] = useState([])
     const [contextInit, setContextInit] = useState(false)
     const [classInstance, setClassInstance] = useState(null);
+    const gameManager = useRef(new GameManager())
+    const versionsMojang = useRef([]);
     const instanceLaunched = useRef(false);
 
     const addTask = (task) => {
@@ -29,10 +36,18 @@ export function FzContextProvider({ children }) {
             setSession(await invoke('get_session', { sessionId: "msa_session" }))
             const instance = new FzVariable();
             await instance.init();
-            const listProfilesGameInternal = await invoke('get_profiles_game');
-            setProfilesGameInternal(listProfilesGameInternal)
-
             setClassInstance(instance);
+
+            await axios.get('https://launchermeta.mojang.com/mc/game/version_manifest.json')
+                .then((response) => {
+                    if (!response.data.versions) return;
+                    versionsMojang.current = response.data.versions
+                })
+
+            await loadProfilesGame()
+
+            await gameManager.current.register();
+
             setContextInit(true)
             unlistenDownloadTasks = await listen('download-progress-frazionz', (event) => {
                 /*const copyTask = [...tasks];
@@ -53,18 +68,32 @@ export function FzContextProvider({ children }) {
                 setTasks(copyTask);*/
             });
 
+
         }
 
         initializeClass();
-        
+
         return () => {
-            if(unlistenDownloadTasks) unlistenDownloadTasks();
-            if(unlistenExtractTasks) unlistenExtractTasks();
+            if (unlistenDownloadTasks) unlistenDownloadTasks();
+            if (unlistenExtractTasks) unlistenExtractTasks();
         };
     }, []);
 
-    const updateSession = async() => {
-        return new Promise(async(resolve, reject) => {
+    const loadProfilesGame = async() => {
+        const listProfilesGameInternal = await invoke('get_profiles_game');
+        const listProfilesGameCustom = await invoke('get_profiles_game_user');
+        for await (const profile of listProfilesGameCustom) {
+            if(profile.icon !== "default") {
+                const isExist = await exists(await join(profile.icon));
+                if(!isExist) profile.icon = "default";
+            }
+            listProfilesGameInternal.push(profile)
+        }
+        setProfilesGameInternal(listProfilesGameInternal)
+    }
+
+    const updateSession = async () => {
+        return new Promise(async (resolve, reject) => {
             const sessionMSA = await invoke('get_session', { sessionId: "msa_session" })
             console.log('Update Session: ', sessionMSA)
             setSession(sessionMSA)
@@ -72,8 +101,8 @@ export function FzContextProvider({ children }) {
         })
     }
 
-    const disconnectSession = async() => {
-        return new Promise(async(resolve, reject) => {
+    const disconnectSession = async () => {
+        return new Promise(async (resolve, reject) => {
             setSession(null)
             await invoke('delete_session', { sessionId: "msa_session" })
             return resolve()
@@ -81,14 +110,14 @@ export function FzContextProvider({ children }) {
     }
 
     return (
-        <FzContext.Provider value={{ tasks: tasks, instance: { launched: instanceLaunched.current }, sessionMSA: { auth: session?.mcProfile, update: updateSession, disconnect: disconnectSession }, profilesGameInternal: profilesGameInternal, functionTask: { add: addTask }, contextInit: contextInit, fzVariable: classInstance }}>
+        <FzContext.Provider value={{ tasks: tasks, instance: { launched: instanceLaunched.current }, gameManager: gameManager.current, mojang: { versions: versionsMojang.current }, sessionMSA: { auth: session?.mcProfile, update: updateSession, disconnect: disconnectSession }, loadProfilesGame: loadProfilesGame, profilesGameInternal: profilesGameInternal, profilesGameCustom: profilesGameCustom, functionTask: { add: addTask }, contextInit: contextInit, fzVariable: classInstance }}>
             {children}
         </FzContext.Provider>
     );
-   
+
 }
 
 export function useFzContext() {
-  return useContext(FzContext);
+    return useContext(FzContext);
 }
 

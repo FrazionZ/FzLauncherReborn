@@ -5,25 +5,32 @@ import { useFzContext } from '../../../FzContext'
 import { appDataDir, join } from '@tauri-apps/api/path';
 import { v4 as uuidv4 } from 'uuid'
 import { exists, createDir, writeTextFile } from '@tauri-apps/api/fs';
-import { invoke } from '@tauri-apps/api/tauri';
+import { convertFileSrc, invoke } from '@tauri-apps/api/tauri';
 import DirectoryIcon from '../../../assets/img/icons/directory'
-import SettingsIcon from '../../../assets/img/icons/settings'
 import Task from '../../../components/Task'
 import axios from 'axios';
 import FzToast from '../../../components/FzToast';
+import DefaultIcon from "../../../assets/img/mc_logo.png"
 import Mods from './profiles/Mods'
 import Rpacks from './profiles/Rpacks'
+import Console from './profiles/Console'
 import Screens from './profiles/Screens'
 import { FaStop } from "react-icons/fa6";
 import { listen } from '@tauri-apps/api/event';
-
+import Settings from './profiles/Settings';
+import MineParse from '../../../components/MineParse'
+import '../../../assets/css/MinecraftText.css'
+import { getVersionManifestMojang, getInfosVersionManifestMojang } from '../../../Utils';
+import { useTranslation } from 'react-i18next';
 //STATE_PROFILE_GAME! 0=Waiting, 1=Install, 2=Update, 3=Playable
 
 
 export default function ProfileGame({ data }) {
 
-
-    const tabs = [
+    
+    const { t } = useTranslation()
+    const mineParse = new MineParse();
+    const [tabs, setTabs] = useState([
         {
             key: "home",
             name: "Accueil",
@@ -33,7 +40,7 @@ export default function ProfileGame({ data }) {
         {
             key: "mods",
             name: "Mods",
-            restricted_level: 0,
+            restricted_level: 2,
             component: <Mods data={data} />
         },
         {
@@ -48,14 +55,18 @@ export default function ProfileGame({ data }) {
             restricted_level: 0,
             component: <Screens data={data} />
         }
-    ]
+    ])
 
     const fzContext = useFzContext();
     let tabsList = [...tabs];
     if (data?.profile_type !== "server") {
         tabsList = tabsList.filter((tab) => tab.restricted_level !== 1);
     }
-    const [tabCurrent, setTab] = useState(data?.profile_type == "server" ? 'home' : 'mods')
+    if (data?.game_type == "vanilla") {
+        tabsList = tabsList.filter((tab) => tab.restricted_level !== 2);
+    }
+    const [icon, setIcon] = useState(data?.profile_type == "server" ? data.icon : data.icon == "default" ? DefaultIcon : convertFileSrc(data.icon, "asset"))
+    const [tabCurrent, setTab] = useState(data?.profile_type == "server" ? 'home' : data?.game_type == "vanilla" ? 'mods' : 'rpacks')
     const [profileInit, setProfileInit] = useState()
     const [button, setButton] = useState({ state: false, label: "En attente" })
     const pid_instance = useRef(null)
@@ -67,17 +78,41 @@ export default function ProfileGame({ data }) {
         isConnected.current = fzContext.sessionMSA.auth !== undefined
     }, [fzContext.sessionMSA.auth])
 
+    useEffect(() => {
+        if (pid_instance.current !== null) {
+            const copyTabs = [...tabs];
+            copyTabs.push({
+                key: "console",
+                name: "Console",
+                restricted_level: 0,
+                component: <Console data={data} pid={pid_instance.current} />
+            })
+            setTabs(copyTabs)
+            setTab('console')
+        } else {
+            setTab(data?.profile_type == "server" ? 'home' : 'mods')
+            let copyTabs = [...tabs];
+            copyTabs = copyTabs.filter(t => t.key !== "console");
+            setTabs(copyTabs)
+        }
+    }, [pid_instance.current])
 
     useEffect(() => {
         console.log('Check install and has update available', data)
         updateStateProfileGame(0)
         setProfileInit(data?.id)
         let unlistenInstanceLaunch = () => { };
-        init().then(async(res) => {
+        init().then(async (res) => {
             updateStateProfileGame(res.state)
             unlistenInstanceLaunch = await listen('launch-game-profile-frazionz', async (event) => {
-                pid_instance.current = event.payload
-                if(event.payload == null) updateStateProfileGame(3)
+                console.log('LAUNCH GAME DATA', event.payload)
+                if (event.payload == null) {
+                    pid_instance.current = null
+                    forceUpdate()
+                    return updateStateProfileGame(3);
+                }
+                if(event.payload.game_id !== data?.id) return;
+                pid_instance.current = event.payload.id
                 forceUpdate()
             });
         })
@@ -94,7 +129,7 @@ export default function ProfileGame({ data }) {
     }
 
     const updateStateProfileGame = (stateProfileGame) => {
-        if(!pid_instance.current) {
+        if (!pid_instance.current) {
             switch (stateProfileGame) {
                 case 0:
                     updateButton(false, "En attente", () => { })
@@ -117,16 +152,17 @@ export default function ProfileGame({ data }) {
     const init = async () => {
         return new Promise(async (resolve, reject) => {
             const dirVersion = await getDirectory()
+            const clientExist = await join(dirVersion, data?.game?.clientJarName)
 
             console.log("CHECK INSTANCE GAME")
             const test = await invoke('get_instance_from_gameid', { gameId: data?.id })
-            if(test !== null) {
+            if (test !== null) {
                 pid_instance.current = test?.id
-                updateButton(false, "Jeu en cours..", () => {})
+                updateButton(false, "Jeu en cours..", () => { })
                 forceUpdate()
             }
 
-            const ivm = await getInfosVersionManifestMojang();
+            const ivm = await getInfosVersionManifestMojang(data?.game?.version);
             infosVersionManifest.current = ivm;
             console.log('New infos version manifest', ivm, infosVersionManifest.current)
 
@@ -135,33 +171,16 @@ export default function ProfileGame({ data }) {
                 await createDir(dirVersion);
                 return resolve({ state: 1 })
             }
+
+            if (!await exists(clientExist)) {
+                return resolve({ state: 1 })
+            }
+
+            await invoke('init_config_profile', { filePath: await join(dirVersion, 'config.json') })
+
             const isEmpty = await invoke('is_directory_empty', { directoryPath: dirVersion })
             if (isEmpty) return resolve({ state: 1 })
             return resolve({ state: 3 })
-
-        })
-    }
-
-    const getVersionManifestMojang = () => {
-        return new Promise(async (resolve, reject) => {
-            await axios.get('https://launchermeta.mojang.com/mc/game/version_manifest.json').then((response) => {
-                let version = response.data.versions.find(version => version.id == data.game.version);
-                return resolve(version)
-            }).catch((err) => {
-                return reject(err);
-            })
-        })
-    }
-
-    const getInfosVersionManifestMojang = async () => {
-        return new Promise(async (resolve, reject) => {
-            getVersionManifestMojang().then(async (version) => {
-                await axios.get(version.url).then((response) => {
-                    return resolve(response.data)
-                }).catch((err) => {
-                    return reject(err);
-                })
-            })
 
         })
     }
@@ -175,7 +194,7 @@ export default function ProfileGame({ data }) {
     }
 
     const getRuntimeDirectory = async () => {
-        return await join(fzContext.fzVariable.dirFzLauncherDatas, "runtime", "bin", "java")
+        return await join(fzContext.fzVariable.dirFzLauncherDatas, "runtime", `jre${data?.jre}`, "bin", "java")
     }
 
     const getAssets = async (manifest) => {
@@ -281,7 +300,20 @@ export default function ProfileGame({ data }) {
         if (infosVersionManifest.current == undefined) return;
         updateButton(false, "Installation..", () => { })
         console.log("Install profile game", infosVersionManifest)
-        var uuidTaskInstall = uuidv4()
+        const fabricTest = fzContext.gameManager.get_class(data?.game_type);
+        console.log("Profile type class: ", fabricTest)
+        if(fabricTest == undefined) return;
+        await fabricTest.instance.step_install(
+            fzContext,
+            data, 
+            infosVersionManifest,
+            await getAssetsDirectory(),
+            await getDirectory()
+        );
+        console.log('Game type downloaded')
+        console.log('GAME READY')
+        updateStateProfileGame(3)
+        /*var uuidTaskInstall = uuidv4()
         let task = {
             taskType: 0,
             uuid: uuidTaskInstall,
@@ -342,7 +374,7 @@ export default function ProfileGame({ data }) {
                         installFabricVersion(task)
                     }
                 })
-            })
+            })*/
             /*task.start().then(async () => {
                 console.log('Assets downloaded')
                 console.log('Prepare download librairies')
@@ -374,9 +406,9 @@ export default function ProfileGame({ data }) {
                                     lastTask: true,
                                     prefix: `${data.name} - Client`,
                                 })
-
+    
                                 task.start().then(async (result) => {
-
+    
                                     if (data?.game_type == "vanilla") {
                                         console.log('GAME READY')
                                         updateStateProfileGame(3)
@@ -389,11 +421,11 @@ export default function ProfileGame({ data }) {
                                 })
                             })
                         })
-
+    
                     })
                 })
-            })*/
-        })
+            })
+        })*/
     }
 
     const installFabricVersion = async (task) => {
@@ -482,9 +514,9 @@ export default function ProfileGame({ data }) {
         await invoke('launch_minecraft', { data: data, assetIndex: ivm.assetIndex.id, minecraftArgs: ivm.minecraftArguments, minecraftJarPath: jarFile, gameDir: gameDir, runtimeDir: runtimeDir, assetsDir: assetsDir, nativesDir: nativesDir, libsDir: libsDir })
         updateButton(true, "Jouer", launchGame)
     }
-    
-    const stopInstance = async() => {
-        if(pid_instance.current == null) return;
+
+    const stopInstance = async () => {
+        if (pid_instance.current == null) return;
         await invoke('kill_process_command', { pid: pid_instance.current })
     }
     /*
@@ -519,11 +551,11 @@ export default function ProfileGame({ data }) {
                 <div className="flex justify-between py-0 items-center">
                     <div className="flex items-center gap-4">
                         <div className="icon_profile_game">
-                            <img src={data?.icon} width={64} height={64} alt={data?.id} />
+                            <img src={icon} onError={() => setIcon(DefaultIcon)} style={{ width: 64, height: 64, objectFit: 'cover' }} alt={data?.id} />
                         </div>
                         <div className="flex flex-col">
                             <span className='text-[24px] font-bold'>{data?.name}</span>
-                            <span className='text-[16px] font-light'>Minecraft {data?.game?.version}</span>
+                            <span className='text-[16px] font-light'>{data?.game_type.charAt(0).toUpperCase() + data?.game_type.slice(1)} {data?.game?.version}</span>
                         </div>
                     </div>
                     <div className="flex gap-4">
@@ -551,18 +583,11 @@ export default function ProfileGame({ data }) {
                             </div>
                         </button>
                         <button onClick={button.callback} disabled={!button.state} className='testbutton w-[284px] rounded-full h-[68px] text-center flex justify-center text-[28px] font-bold uppercase'>{button.label}</button>
-                        <button className='testbutton right-0 gap-0 rounded-full overflow-hidden text-center flex w-[68px] h-[68px]' style={{ padding: '0', background: 'var(--gradient_blue)' }}>
-                            <div className="label flex flex-1 whitespace-nowrap justify-center overflow-hidden text-ellipsis">
-                                Paramètres
-                            </div>
-                            <div className="absolute right-0 min-w-[68px] h-full flex justify-center items-center">
-                                <SettingsIcon size={32} />
-                            </div>
-                        </button>
+                        <Settings dataID={data?.id} />
                     </div>
-                    {pid_instance.current && 
+                    {pid_instance.current &&
                         <button onClick={stopInstance} className='absolute right-0 bottom-0 top-0 my-auto mx-0 gap-0 rounded-full overflow-hidden text-center flex justify-center items-center w-[68px] h-[68px]' style={{ padding: '0', background: 'var(--gradient_red)' }}>
-                            <FaStop color='white' size={32} /> 
+                            <FaStop color='white' size={32} />
                         </button>
                     }
                 </div>
@@ -583,7 +608,7 @@ export default function ProfileGame({ data }) {
                     background: var(--btn-gradient-disable);
                 }
                 .testbutton:not(:disabled):hover {
-                    width: 100%;
+                    width: 100.9%;
                     animation: example 1s forwards;
                     transition: all 0.25s; 
                 }

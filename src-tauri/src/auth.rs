@@ -2,7 +2,7 @@ pub(crate) struct Auth;
 
 use async_std::future::Future;
 use futures_util::future::err;
-use futures_util::FutureExt as _;
+use futures_util::{FutureExt as _, TryFutureExt};
 use regex::Regex;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
 use reqwest::{Client, StatusCode};
@@ -237,8 +237,6 @@ impl Auth {
             .text()
             .await?;
 
-        println!("EXAMPLE RTR RESPONSE: {}", refresh_token_response);
-
         let refresh_token_response: RefreshTokenResponse = serde_json::from_str(&refresh_token_response)?;
 
         match Self::authenticate(refresh_token_response).await {
@@ -278,7 +276,6 @@ impl Auth {
     pub async fn authenticate( 
         refresh_response: RefreshTokenResponse,
     ) -> Result<<Auth as Example>::MinecraftSession, Box<dyn Error>> {
-        println!("XboxLiveResponse Requesst"); 
 
         let xbox_live_response: XboxLiveResponse = reqwest::Client::new()
             .post(self::Auth::XBOX_LIVE_AUTHORIZATION_ENDPOINT)
@@ -292,11 +289,20 @@ impl Auth {
                 "TokenType": "JWT"
             }))
             .send()
+            .map_err(|e| {
+                Box::new(AuthError::ReqwestError(
+                    "Une erreur est survenue lors de la récupération de votre compte Xbox".to_string(),
+                ))
+            })
             .await?
             .json()
+            .map_err(|e| {
+                Box::new(AuthError::ReqwestError(
+                    "Une erreur est survenue lors de la récupération de votre compte Xbox".to_string(),
+                ))
+            })
             .await?;
 
-        println!("XstsResponse Request");
         let _xsts_response: XstsResponse = reqwest::Client::new()
             .post(self::Auth::XSTS_AUTHORIZATION_ENDPOINT)
             .json(&serde_json::json!({
@@ -308,8 +314,18 @@ impl Auth {
                 "TokenType": "JWT"
             }))
             .send()
+            .map_err(|e| {
+                Box::new(AuthError::ReqwestError(
+                    "Une erreur est survenue lors de la récupération de votre compte Xbox".to_string(),
+                ))
+            })
             .await?
             .json()
+            .map_err(|e| {
+                Box::new(AuthError::ReqwestError(
+                    "Une erreur est survenue lors de la récupération de votre compte Xbox".to_string(),
+                ))
+            })
             .await?;
 
         if let Some(uhs) = _xsts_response.get_uhs() {
@@ -320,6 +336,11 @@ impl Auth {
                 .header("Content-Type", "application/json")
                 .json(&auth_request)
                 .send()
+                .map_err(|e| {
+                    Box::new(AuthError::ReqwestError(
+                        "Une erreur est survenue lors de la récupération de votre compte Minecraft".to_string(),
+                    ))
+                })
                 .await?;
 
             let minecraft_response: MinecraftAuthResponse = auth_response_minecraft.json().await?;
@@ -341,6 +362,11 @@ impl Auth {
                 .get(self::Auth::MINECRAFT_STORE_ENDPOINT)
                 .headers(headers)
                 .send()
+                .map_err(|e| {
+                    Box::new(AuthError::ReqwestError(
+                        "Une erreur est survenue lors de votre license Minecraft".to_string(),
+                    ))
+                })
                 .await?;
 
             let mc_store_data: Value = store_response_minecraft.json().await?;
@@ -368,16 +394,17 @@ impl Auth {
                         .send()
                         .await
                         .map_err(|e| {
-                            Box::new(AuthError::MinecraftProfileFetchError(e.into()))
-                                as Box<dyn Error>
+                            Box::new(AuthError::ReqwestError(
+                                "Une erreur est survenue lors de la recherche de votre profil".to_string(),
+                            ))
                         })?;
 
                     if profile_response_minecraft.status().is_success() {
-                        println!("TEST: {}", access_token);
                         let mc_profile_data: MinecraftProfile =
                             profile_response_minecraft.json().await.map_err(|e| {
-                                Box::new(AuthError::MinecraftProfileFetchError(e.into()))
-                                    as Box<dyn Error>
+                                Box::new(AuthError::ReqwestError(
+                                    "Une erreur est survenue lors de la recherche de votre profil".to_string(),
+                                ))
                             })?;
 
                         let mc_profile_session = MinecraftSession {

@@ -1,5 +1,5 @@
-import { readDir, BaseDirectory } from "@tauri-apps/api/fs"
-import { join } from "@tauri-apps/api/path"
+import { readDir, BaseDirectory, renameFile, removeFile } from "@tauri-apps/api/fs"
+import { join, resolve } from "@tauri-apps/api/path"
 import { useEffect, useState } from "react"
 import { useFzContext } from "../../../../FzContext"
 import windowClose from '../../../../assets/img/icons/window_close.svg'
@@ -8,16 +8,14 @@ import { Dialog } from "primereact/dialog";
 import { ProgressSpinner } from 'primereact/progressspinner';
 import { MdOutlineError } from "react-icons/md";
 import SearchIcon from '../../../../assets/img/icons/search'
-import ImportIcon from '../../../../assets/img/icons/import'
-import { MineParse } from '../../../../Utils';
+import ImportIcon from '../../../../assets/img/icons/import' 
 import { InputSwitch } from 'primereact/inputswitch'
-import mccolors from 'minecraft-colors';
-import { renameFile } from '@tauri-apps/api/fs';
+import mccolors from 'minecraft-colors'; 
+import { HiTrash } from "react-icons/hi2";
 import { v4 as uuidv4 } from 'uuid';
 
 export default function Rpacks({ data }) {
-
-    const mineParse = new MineParse();
+ 
     const fzContext = useFzContext();
     const [rpacks, setRpacks] = useState([])
     const [load, setLoad] = useState(false)
@@ -75,6 +73,17 @@ export default function Rpacks({ data }) {
         setRpacks(copyEntries);
     }
 
+    async function removeRpack(uuid) {
+        let copyEntries = [...rpacks];
+        const entry = copyEntries.find((r) => r.uuid == uuid);
+        if(entry == undefined) return;
+        const rootDir = 'MCVersions/' + data?.id + '/resourcepacks/'
+        const nameFile = rootDir + entry.name + (entry.state ? '.zip' : '.disabled');
+        await removeFile(nameFile, { dir: BaseDirectory.AppData, recursive: true })
+        copyEntries = copyEntries.filter((r) => r.uuid !== entry.uuid);
+        setRpacks(copyEntries);
+    }
+
     return (
         <>
             <div className="flex flex-col gap-4 h-full">
@@ -107,6 +116,7 @@ export default function Rpacks({ data }) {
                         :
                         <div className="flex flex-col gap-4 w-full overflow-y-auto h-full">
                             {filterWithLike(rpacks, 'name', query).map((rpack, _) => {
+                                
                                 return (
                                     <div key={rpack.uuid} className="rpack flex bg-[var(--fzbg-1)] w-full p-4 rounded-lg">
                                         <div className="flex flex-1 gap-4">
@@ -122,8 +132,11 @@ export default function Rpacks({ data }) {
                                                 </span>
                                             </div>
                                         </div>
-                                        <div className="flex items-center">
+                                        <div className="flex items-center gap-4">
                                             <InputSwitch onChange={(e) => handleChangeState(rpack?.uuid, e.value)} checked={rpack.state} />
+                                            <div onClick={() => { removeRpack(rpack?.uuid) }} className="flex cursor-pointer justify-center items-center bg-[#484C53] hover:bg-[var(--color-red)] transition-all" style={{ borderRadius: 4, width: '48px', height: '48px', padding: 0 }}>
+                                                <HiTrash color="white" size={28} />
+                                            </div>
                                         </div>
                                     </div>
                                 )
@@ -133,20 +146,7 @@ export default function Rpacks({ data }) {
             </div>
             <style>
                 {`
-                    div[data-pc-name="inputswitch"][aria-checked="false"] span[data-pc-section="slider"] {
-                        background: #484C53;
-                    }
-                    span[data-pc-section="slider"] {
-                        background: var(--btn-gradient);
-                        border: none;
-                        outline: none;
-                    }
-                    div[data-pc-name="inputswitch"][aria-checked="false"] span[data-pc-section="slider"]::before {
-                        background: #848E95 !important;
-                    }
-                    div[data-pc-name="inputswitch"][aria-checked="true"] span[data-pc-section="slider"]::before {
-                        background: white !important;
-                    }
+                    
                 `}
             </style>
         </>

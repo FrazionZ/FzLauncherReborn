@@ -29,7 +29,7 @@ export default function Runtime(props) {
       if (uuidTask !== null) return;
       javaversion(await join(fzContext.fzVariable.dirFzLauncherDatas, 'runtime', 'bin', 'java')).then(async(version) => {
         if(version !== "no install") {
-          setLocation('/connected')
+          setLocation('/login')
         }else{
           const dirRuntime = await join(fzContext.fzVariable.dirFzLauncherRuntime)
           uuid = uuidv4()
@@ -58,7 +58,7 @@ export default function Runtime(props) {
             task.start().then(async () => {
               await removeFile(await resolve(dirRuntime, 'java.zip'))
               console.log('Navigate to connected')
-              setLocation('/connected')
+              setLocation('/login')
             })
           })
         }
